@@ -8,6 +8,7 @@ from threading import Thread
 
 # قراءة توكن البوت من متغيرات البيئة بأمان
 API_TOKEN = os.getenv("BOT_TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")
 bot = telebot.TeleBot(API_TOKEN)
 
 # قائمة العملات المستهدفة بالفحص الشامل
