@@ -6,6 +6,7 @@ import telebot
 
 # قراءة توكن البوت
 API_TOKEN = os.getenv("BOT_TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")
 bot = telebot.TeleBot(API_TOKEN)
 
 TARGET_COINS = [
