@@ -1,12 +1,12 @@
 name: Pro-Crypto-Scanner-Bot
 
 on:
-  push:
-    branches: [ main ]
-  workflow_dispatch:
+  # ⏰ جدول زمني تلقائي: يعمل أوتوماتيكياً كل ساعتين تماماً
   schedule:
-    # 🔄 تشغيل الرادار تلقائياً كل ساعتين لضمان استمرار التنبيهات
     - cron: '0 */2 * * *'
+  
+  # زر تشغيل يدوي اختياري إذا أردت تشغيله في أي وقت من قيت هاب
+  workflow_dispatch:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -27,12 +27,11 @@ jobs:
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pandas requests numpy pyTelegramBotAPI flask telethon
+          pip install -r requirements.txt
           
-      - name: Run boti
+      - name: Run Pro Bot Auto Scanner
         env:
-          # يمكنك استخدام نفس السيركت أو إنشاء Secret جديد باسم PRO_BOT_TOKEN
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          CHAT_ID: ${{ secrets.CHAT_ID }}
         run: |
-          # تشغيل البوت المنفصل الجديد بشكل نظيف
           python boti.py
