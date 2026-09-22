@@ -57,10 +57,9 @@ def scan_and_send():
                 avg_vol = volume.rolling(20).mean().iloc[-1]
                 current_vol = volume.iloc[-1]
                 
-                is_high_volume = current_vol > avg_vol * 1.3
-                is_long = (cp > cur_ema20) and (cur_ema20 > cur_ema50) and (50 < cur_rsi < 75) and (cur_macd > cur_signal)
-                is_short = (cp < cur_ema20) and (cur_ema20 < cur_ema50) and (25 < cur_rsi < 50) and (cur_macd < cur_signal)
-                
+                is_high_volume = current_vol > avg_vol * 1.15  # بدلاً من 1.3 لتكون أكثر مرونة
+                is_long = (cp > cur_ema20) and (45 < cur_rsi < 80) and (cur_macd > cur_signal)
+                is_short = (cp < cur_ema20) and (20 < cur_rsi < 55) and (cur_macd < cur_signal)
                 if is_high_volume and (is_long or is_short):
                     side = "LONG 🚀" if is_long else "SHORT 📉"
                     tp = cp * 1.035 if is_long else cp * 0.965
