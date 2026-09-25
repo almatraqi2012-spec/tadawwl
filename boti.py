@@ -3,8 +3,10 @@ import requests
 import pandas as pd
 import numpy as np
 import telebot
+from flask import Flask
+from threading import Thread
 
-# قراءة توكن البوت
+# قراءة البيانات من متغيرات البيئة بأمان
 API_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 bot = telebot.TeleBot(API_TOKEN)
@@ -22,9 +24,9 @@ def calculate_rsi(series, period=14):
     rs = gain / loss
     return 100 - (100 / (1 + rs))
 
-def scan_and_send():
-    print("🔍 بدء فحص السوق وإرسال التنبيهات...")
+def scan_market():
     signals = []
+    print("🔍 جاري فحص السوق بناءً على طلبك...")
     
     for symbol in TARGET_COINS:
         url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval=1h&limit=100"
@@ -58,16 +60,18 @@ def scan_and_send():
                 avg_vol = volume.rolling(20).mean().iloc[-1]
                 current_vol = volume.iloc[-1]
                 
-                is_high_volume = current_vol > avg_vol * 1.15  # بدلاً من 1.3 لتكون أكثر مرونة
-                is_long = (cp > cur_ema20) and (45 < cur_rsi < 80) and (cur_macd > cur_signal)
-                is_short = (cp < cur_ema20) and (20 < cur_rsi < 55) and (cur_macd < cur_signal)
+                # شروط مرنة لضمان ظهور نتائج عند الفحص اليدوي
+                is_high_volume = current_vol > avg_vol * 1.12
+                is_long = (cp > cur_ema20) and (40 < cur_rsi < 85) and (cur_macd > cur_signal)
+                is_short = (cp < cur_ema20) and (15 < cur_rsi < 60) and (cur_macd < cur_signal)
+                
                 if is_high_volume and (is_long or is_short):
                     side = "LONG 🚀" if is_long else "SHORT 📉"
-                    tp = cp * 1.035 if is_long else cp * 0.965
-                    sl = df.iloc[-10:, 3].min() * 0.985 if is_long else df.iloc[-10:, 2].max() * 1.015
+                    tp = cp * 1.03 if is_long else cp * 0.97
+                    sl = df.iloc[-10:, 3].min() * 0.99 if is_long else df.iloc[-10:, 2].max() * 1.01
                     chart = f"https://www.tradingview.com/chart/?symbol=BINANCE:{symbol}"
                     
-                    msg = (f"🏛 **تقرير رادار الاحترافي**\n"
+                    msg = (f"🏛 **تقرير رادار المنصة (مباشر)**\n"
                            f"━━━━━━━━━━━━━━\n"
                            f"🪙 العملة: #{symbol}\n"
                            f"📊 الإشارة: **{side}**\n\n"
@@ -81,15 +85,35 @@ def scan_and_send():
         except:
             continue
             
-    # إرسال النتائج عبر تيليجرام دفعة واحدة
-    CHAT_ID = os.getenv("CHAT_ID") # أو ضع ايديك مباشرة هنا
-    if signals and CHAT_ID:
-        for sig in signals[:5]:
-            requests.post(
-                f"https://api.telegram.org/bot{API_TOKEN}/sendMessage",
-                json={"chat_id": CHAT_ID, "text": sig, "parse_mode": "Markdown"}
-            )
-    print("تم الانتهاء وإرسال التقارير بنجاح.")
+    return signals
+
+# أوامر البوت على تيليجرام
+@bot.message_handler(commands=['start', 'scan'])
+def handle_commands(message):
+    bot.reply_to(message, "⏳ جاري فحص العملات الآن، انتظر لحظات...")
+    results = scan_market()
+    if not results:
+        bot.send_message(message.chat.id, "⚖️ لا توجد فرص قوية مطابقة للمعايير في هذه اللحظة، حاول مرة أخرى لاحقاً.")
+    else:
+        for res in results[:5]:
+            bot.send_message(message.chat.id, res, parse_mode="Markdown")
+
+# خادم ويب خفيف لإرضاء منصة Render ومنع انقطاع السيرفر
+app = Flask('')
+
+@app.route('/')
+def home():
+    print("Health check ping received!")
+    return "Bot is alive and running 24/7!"
+
+def run_web():
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host='0.0.0.0', port=port)
 
 if __name__ == "__main__":
-    scan_and_send()
+    # تشغيل خادم الويب في الخلفية
+    web_thread = Thread(target=run_web)
+    web_thread.start()
+    
+    print("Bot is polling interactively on Render...")
+    bot.infinity_polling()
