@@ -1,6 +1,5 @@
+pyTelegramBotAPI
+requests
 pandas
 numpy
-requests
-pyTelegramBotAPI
-Flask
-telethon
+flask
