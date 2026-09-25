@@ -1,5 +1,6 @@
 import os
 import time
+from datetime import datetime
 import requests
 import pandas as pd
 import numpy as np
@@ -26,10 +27,13 @@ def calculate_rsi(series, period=14):
     return 100 - (100 / (1 + rs))
 
 def scan_market():
-    trend_vol_signals = [] # توصيات الإستراتيجية الأولى (EMA + Volume)
-    momentum_signals = []  # توصيات الإستراتيجية الثانية (RSI + MACD)
+    trend_vol_signals = [] 
+    momentum_signals = []  
     
-    print("🔍 جاري فحص السوق وتوليد التوصيات المستقلة...")
+    # جلب الوقت الحالي بتنسيق جميل (ساعة:دقيقة - تاريخ)
+    current_time = datetime.now().strftime("%Y-%m-%d | %H:%M")
+    
+    print(f"🔍 جاري فحص السوق عند الساعة {current_time}...")
     
     for symbol in TARGET_COINS:
         url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval=1h&limit=100"
@@ -77,14 +81,15 @@ def scan_market():
                     tp1 = cp * 1.03 if strat1_long else cp * 0.97
                     sl1 = df.iloc[-10:, 3].min() * 0.99 if strat1_long else df.iloc[-10:, 2].max() * 1.01
                     
-                    msg1 = (f"🌊 **توصية إستراتيجية (الاتجاه + السيولة)**\n"
+                    msg1 = (f"🌊 **توصية (الاتجاه + السيولة)**\n"
                             f"━━━━━━━━━━━━━━\n"
                             f"🪙 العملة: #{symbol}\n"
+                            f"⏱ **وقت الرصد:** `{current_time}`\n"
                             f"📊 الإشارة: **{side1}**\n\n"
                             f"📥 الدخول: `{cp}`\n"
                             f"🎯 الهدف: `{round(tp1, 4)}`\n"
                             f"🛑 الوقف: `{round(sl1, 4)}`\n\n"
-                            f"• الشروط المتحققة: EMA + Volume (1.15x)\n"
+                            f"• الشروط: EMA + Volume (1.15x)\n"
                             f"━━━━━━━━━━━━━━\n"
                             f"📈 [عرض الشارت المباشر]({chart})")
                     trend_vol_signals.append(msg1)
@@ -100,14 +105,15 @@ def scan_market():
                     tp2 = cp * 1.03 if strat2_long else cp * 0.97
                     sl2 = df.iloc[-10:, 3].min() * 0.99 if strat2_long else df.iloc[-10:, 2].max() * 1.01
                     
-                    msg2 = (f"⚡ **توصية إستراتيجية (الزخم والدايفرجنس)**\n"
+                    msg2 = (f"⚡ **توصية (الزخم والدايفرجنس)**\n"
                             f"━━━━━━━━━━━━━━\n"
                             f"🪙 العملة: #{symbol}\n"
+                            f"⏱ **وقت الرصد:** `{current_time}`\n"
                             f"📊 الإشارة: **{side2}**\n\n"
                             f"📥 الدخول: `{cp}`\n"
                             f"🎯 الهدف: `{round(tp2, 4)}`\n"
                             f"🛑 الوقف: `{round(sl2, 4)}`\n\n"
-                            f"• الشروط المتحققة: RSI ({round(cur_rsi, 1)}) + MACD Cross\n"
+                            f"• الشروط: RSI ({round(cur_rsi, 1)}) + MACD Cross\n"
                             f"━━━━━━━━━━━━━━\n"
                             f"📈 [عرض الشارت المباشر]({chart})")
                     momentum_signals.append(msg2)
@@ -140,10 +146,10 @@ def send_results_to_chat(target_chat_id):
     if total_sent == 0:
         print("السوق هادئ حالياً، لم يتم إرسال رسائل تلقائية.")
 
-# دالة الفحص التلقائي في الخلفية (تعمل كل ساعتين 7200 ثانية)
+# دالة الفحص التلقائي في الخلفية (كل ساعتين)
 def background_scheduler():
     while True:
-        time.sleep(10) # انتظار قليل عند بدء التشغيل
+        time.sleep(15) 
         if CHAT_ID:
             print("⏰ بدء جولة الفحص التلقائي المجدولة...")
             try:
@@ -151,13 +157,12 @@ def background_scheduler():
             except Exception as e:
                 print(f"خطأ في الفحص التلقائي: {e}")
         
-        # النوم لمدة ساعتين (7200 ثانية) قبل الجولة التالية
         time.sleep(7200)
 
 # أوامر البوت اليدوية على تيليجرام
 @bot.message_handler(commands=['start', 'scan'])
 def handle_commands(message):
-    bot.reply_to(message, "⏳ جاري فحص السوق بناءً على الإستراتيجيتين المستقلتين...")
+    bot.reply_to(message, "⏳ جاري فحص السوق وتحديد أوقات الفرص بدقة...")
     trend_res, momentum_res = scan_market()
     
     total_sent = 0
@@ -179,21 +184,19 @@ app = Flask('')
 
 @app.route('/')
 def home():
-    return "Dual Independent Strategies Bot with Auto-Loop is active 24/7!"
+    return "Bot with Timestamp is active 24/7!"
 
 def run_web():
     port = int(os.environ.get("PORT", 8080))
     app.run(host='0.0.0.0', port=port)
 
 if __name__ == "__main__":
-    # تشغيل خادم الويب في الخلفية
     web_thread = Thread(target=run_web)
     web_thread.start()
     
-    # تشغيل نظام الفحص التلقائي (الكرون الداخلي) في الخلفية
     scheduler_thread = Thread(target=background_scheduler)
     scheduler_thread.daemon = True
     scheduler_thread.start()
     
-    print("Bot is fully active: Auto-Loop + Interactive Polling running on Render...")
+    print("Bot with Timestamps is running successfully on Render...")
     bot.infinity_polling()
