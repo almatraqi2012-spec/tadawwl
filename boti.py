@@ -1,4 +1,5 @@
 import os
+import time
 import requests
 import pandas as pd
 import numpy as np
@@ -25,8 +26,8 @@ def calculate_rsi(series, period=14):
     return 100 - (100 / (1 + rs))
 
 def scan_market():
-    trend_vol_signals = [] # توصيات إستراتيجية (EMA + Volume)
-    momentum_signals = []  # توصيات إستراتيجية (RSI + MACD)
+    trend_vol_signals = [] # توصيات الإستراتيجية الأولى (EMA + Volume)
+    momentum_signals = []  # توصيات الإستراتيجية الثانية (RSI + MACD)
     
     print("🔍 جاري فحص السوق وتوليد التوصيات المستقلة...")
     
@@ -43,7 +44,7 @@ def scan_market():
                 close = df.iloc[:, 4]
                 volume = df.iloc[:, 5]
                 
-                # 1. حساب المؤشرات الأربعة
+                # حساب المؤشرات
                 ema20 = close.ewm(span=20).mean()
                 ema50 = close.ewm(span=50).mean()
                 rsi = calculate_rsi(close, 14)
@@ -65,7 +66,7 @@ def scan_market():
                 chart = f"https://www.tradingview.com/chart/?symbol=BINANCE:{symbol}"
 
                 # ==========================================
-                # 🟢 الإستراتيجية الأولى: (EMA + Volume) فقط
+                # 🟢 الإستراتيجية الأولى: (EMA + Volume)
                 # ==========================================
                 is_high_volume = current_vol > avg_vol * 1.15
                 strat1_long = (cp > cur_ema20) and (cur_ema20 > cur_ema50) and is_high_volume
@@ -89,7 +90,7 @@ def scan_market():
                     trend_vol_signals.append(msg1)
 
                 # ==========================================
-                # 🟣 الإستراتيجية الثانية: (RSI + MACD) فقط
+                # 🟣 الإستراتيجية الثانية: (RSI + MACD)
                 # ==========================================
                 strat2_long = (50 < cur_rsi < 75) and (cur_macd > cur_signal)
                 strat2_short = (25 < cur_rsi < 50) and (cur_macd < cur_signal)
@@ -116,43 +117,83 @@ def scan_market():
             
     return trend_vol_signals, momentum_signals
 
-# أوامر البوت على تيليجرام
+def send_results_to_chat(target_chat_id):
+    trend_res, momentum_res = scan_market()
+    total_sent = 0
+    
+    if trend_res:
+        for res in trend_res[:3]:
+            try:
+                bot.send_message(target_chat_id, res, parse_mode="Markdown")
+                total_sent += 1
+            except:
+                pass
+            
+    if momentum_res:
+        for res in momentum_res[:3]:
+            try:
+                bot.send_message(target_chat_id, res, parse_mode="Markdown")
+                total_sent += 1
+            except:
+                pass
+            
+    if total_sent == 0:
+        print("السوق هادئ حالياً، لم يتم إرسال رسائل تلقائية.")
+
+# دالة الفحص التلقائي في الخلفية (تعمل كل ساعتين 7200 ثانية)
+def background_scheduler():
+    while True:
+        time.sleep(10) # انتظار قليل عند بدء التشغيل
+        if CHAT_ID:
+            print("⏰ بدء جولة الفحص التلقائي المجدولة...")
+            try:
+                send_results_to_chat(CHAT_ID)
+            except Exception as e:
+                print(f"خطأ في الفحص التلقائي: {e}")
+        
+        # النوم لمدة ساعتين (7200 ثانية) قبل الجولة التالية
+        time.sleep(7200)
+
+# أوامر البوت اليدوية على تيليجرام
 @bot.message_handler(commands=['start', 'scan'])
 def handle_commands(message):
     bot.reply_to(message, "⏳ جاري فحص السوق بناءً على الإستراتيجيتين المستقلتين...")
     trend_res, momentum_res = scan_market()
     
     total_sent = 0
-    
-    # إرسال توصيات السيولة والاتجاه
     if trend_res:
         for res in trend_res[:3]:
             bot.send_message(message.chat.id, res, parse_mode="Markdown")
             total_sent += 1
             
-    # إرسال توصيات الزخم والـ MACD
     if momentum_res:
         for res in momentum_res[:3]:
             bot.send_message(message.chat.id, res, parse_mode="Markdown")
             total_sent += 1
             
     if total_sent == 0:
-        bot.send_message(message.chat.id, "⚖️ لا توجد توصيات متطابقة مع الإستراتيجيتين حالياً.")
+        bot.send_message(message.chat.id, "⚖️ لا توجد توصيات مطابقة للإستراتيجيتين حالياً.")
 
 # خادم ويب لإرضاء منصة Render
 app = Flask('')
 
 @app.route('/')
 def home():
-    return "Dual Independent Strategies Bot is active!"
+    return "Dual Independent Strategies Bot with Auto-Loop is active 24/7!"
 
 def run_web():
     port = int(os.environ.get("PORT", 8080))
     app.run(host='0.0.0.0', port=port)
 
 if __name__ == "__main__":
+    # تشغيل خادم الويب في الخلفية
     web_thread = Thread(target=run_web)
     web_thread.start()
     
-    print("Bot with 2 Independent Strategies is running on Render...")
+    # تشغيل نظام الفحص التلقائي (الكرون الداخلي) في الخلفية
+    scheduler_thread = Thread(target=background_scheduler)
+    scheduler_thread.daemon = True
+    scheduler_thread.start()
+    
+    print("Bot is fully active: Auto-Loop + Interactive Polling running on Render...")
     bot.infinity_polling()
