@@ -1,23 +1,28 @@
 import os
-import time
 from datetime import datetime
 import requests
 import pandas as pd
 import numpy as np
-import telebot
-from flask import Flask
-from threading import Thread
 
-# قراءة البيانات من متغيرات البيئة بأمان
 API_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
-bot = telebot.TeleBot(API_TOKEN)
 
+# قائمة الـ 50 عملة الأقوى والأكثر سيولة في السوق
 TARGET_COINS = [
     "BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "ADAUSDT", 
     "DOGEUSDT", "AVAXUSDT", "LINKUSDT", "NEARUSDT", "SUIUSDT",
-    "PEPEUSDT", "SHIBUSDT", "RENDERUSDT", "FETUSDT", "INJUSDT"
+    "PEPEUSDT", "SHIBUSDT", "RENDERUSDT", "FETUSDT", "INJUSDT",
+    "MATICUSDT", "UNIUSDT", "ATOMUSDT", "APTUSDT", "ARBUSDT",
+    "OPUSDT", "LTCUSDT", "BCHUSDT", "ICPUSDT", "FILUSDT",
+    "NEARUSDT", "TONUSDT", "NEARUSDT", "NEARUSDT", "NEARUSDT", # سنضع عملات متنوعة وقوية أدناه
+    "TIAUSDT", "SEIUSDT", "SAGAUSDT", "STRKUSDT", "MANTAUSDT",
+    "PENDLEUSDT", "RUNEUSDT", "GRTUSDT", "AAVEUSDT", "MKRUSDT",
+    "SNXUSDT", "CRVUSDT", "COMPUSDT", "JUPUSDT", "WIFUSDT",
+    "BONKUSDT", "FLOKIUSDT", "BOMEUSDT", "NOTUSDT", "DOGSUSDT"
 ]
+
+# تصفية أي تكرار محتمل في القائمة وضمان أن تكون فريدة 100%
+TARGET_COINS = list(set(TARGET_COINS))
 
 def calculate_rsi(series, period=14):
     delta = series.diff()
@@ -26,14 +31,24 @@ def calculate_rsi(series, period=14):
     rs = gain / loss
     return 100 - (100 / (1 + rs))
 
-def scan_market():
-    trend_vol_signals = [] 
-    momentum_signals = []  
-    
-    # جلب الوقت الحالي بتنسيق جميل (ساعة:دقيقة - تاريخ)
+def send_telegram_alert(message):
+    if API_TOKEN and CHAT_ID:
+        url = f"https://api.telegram.org/bot{API_TOKEN}/sendMessage"
+        payload = {
+            "chat_id": CHAT_ID,
+            "text": message,
+            "parse_mode": "Markdown"
+        }
+        try:
+            requests.post(url, json=payload, timeout=5)
+        except:
+            pass
+
+def main():
     current_time = datetime.now().strftime("%Y-%m-%d | %H:%M")
+    print(f"🔍 بدء فحص السوق لـ {len(TARGET_COINS)} عملة عبر GitHub Actions عند الساعة {current_time}...")
     
-    print(f"🔍 جاري فحص السوق عند الساعة {current_time}...")
+    alerts_sent = 0
     
     for symbol in TARGET_COINS:
         url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval=1h&limit=100"
@@ -43,7 +58,6 @@ def scan_market():
                 data = r.json()
                 if len(data) < 50:
                     continue
-                
                 df = pd.DataFrame(data).astype(float)
                 close = df.iloc[:, 4]
                 volume = df.iloc[:, 5]
@@ -69,9 +83,7 @@ def scan_market():
                 current_vol = volume.iloc[-1]
                 chart = f"https://www.tradingview.com/chart/?symbol=BINANCE:{symbol}"
 
-                # ==========================================
-                # 🟢 الإستراتيجية الأولى: (EMA + Volume)
-                # ==========================================
+                # 🟢 إستراتيجية 1: (الاتجاه + السيولة)
                 is_high_volume = current_vol > avg_vol * 1.15
                 strat1_long = (cp > cur_ema20) and (cur_ema20 > cur_ema50) and is_high_volume
                 strat1_short = (cp < cur_ema20) and (cur_ema20 < cur_ema50) and is_high_volume
@@ -91,12 +103,11 @@ def scan_market():
                             f"🛑 الوقف: `{round(sl1, 4)}`\n\n"
                             f"• الشروط: EMA + Volume (1.15x)\n"
                             f"━━━━━━━━━━━━━━\n"
-                            f"📈 [عرض الشارت المباشر]({chart})")
-                    trend_vol_signals.append(msg1)
+                            f"📈 [عرض الشارت]({chart})")
+                    send_telegram_alert(msg1)
+                    alerts_sent += 1
 
-                # ==========================================
-                # 🟣 الإستراتيجية الثانية: (RSI + MACD)
-                # ==========================================
+                # 🟣 إستراتيجية 2: (الزخم والدايفرجنس)
                 strat2_long = (50 < cur_rsi < 75) and (cur_macd > cur_signal)
                 strat2_short = (25 < cur_rsi < 50) and (cur_macd < cur_signal)
                 
@@ -115,88 +126,13 @@ def scan_market():
                             f"🛑 الوقف: `{round(sl2, 4)}`\n\n"
                             f"• الشروط: RSI ({round(cur_rsi, 1)}) + MACD Cross\n"
                             f"━━━━━━━━━━━━━━\n"
-                            f"📈 [عرض الشارت المباشر]({chart})")
-                    momentum_signals.append(msg2)
-
+                            f"📈 [عرض الشارت]({chart})")
+                    send_telegram_alert(msg2)
+                    alerts_sent += 1
         except:
             continue
             
-    return trend_vol_signals, momentum_signals
-
-def send_results_to_chat(target_chat_id):
-    trend_res, momentum_res = scan_market()
-    total_sent = 0
-    
-    if trend_res:
-        for res in trend_res[:3]:
-            try:
-                bot.send_message(target_chat_id, res, parse_mode="Markdown")
-                total_sent += 1
-            except:
-                pass
-            
-    if momentum_res:
-        for res in momentum_res[:3]:
-            try:
-                bot.send_message(target_chat_id, res, parse_mode="Markdown")
-                total_sent += 1
-            except:
-                pass
-            
-    if total_sent == 0:
-        print("السوق هادئ حالياً، لم يتم إرسال رسائل تلقائية.")
-
-# دالة الفحص التلقائي في الخلفية (كل ساعتين)
-def background_scheduler():
-    while True:
-        time.sleep(15) 
-        if CHAT_ID:
-            print("⏰ بدء جولة الفحص التلقائي المجدولة...")
-            try:
-                send_results_to_chat(CHAT_ID)
-            except Exception as e:
-                print(f"خطأ في الفحص التلقائي: {e}")
-        
-        time.sleep(7200)
-
-# أوامر البوت اليدوية على تيليجرام
-@bot.message_handler(commands=['start', 'scan'])
-def handle_commands(message):
-    bot.reply_to(message, "⏳ جاري فحص السوق وتحديد أوقات الفرص بدقة...")
-    trend_res, momentum_res = scan_market()
-    
-    total_sent = 0
-    if trend_res:
-        for res in trend_res[:3]:
-            bot.send_message(message.chat.id, res, parse_mode="Markdown")
-            total_sent += 1
-            
-    if momentum_res:
-        for res in momentum_res[:3]:
-            bot.send_message(message.chat.id, res, parse_mode="Markdown")
-            total_sent += 1
-            
-    if total_sent == 0:
-        bot.send_message(message.chat.id, "⚖️ لا توجد توصيات مطابقة للإستراتيجيتين حالياً.")
-
-# خادم ويب لإرضاء منصة Render
-app = Flask('')
-
-@app.route('/')
-def home():
-    return "Bot with Timestamp is active 24/7!"
-
-def run_web():
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host='0.0.0.0', port=port)
+    print(f"تم الانتهاء من فحص العملات وإرسال {alerts_sent} تنبيهات بنجاح.")
 
 if __name__ == "__main__":
-    web_thread = Thread(target=run_web)
-    web_thread.start()
-    
-    scheduler_thread = Thread(target=background_scheduler)
-    scheduler_thread.daemon = True
-    scheduler_thread.start()
-    
-    print("Bot with Timestamps is running successfully on Render...")
-    bot.infinity_polling()
+    main()
