@@ -1,9 +1,10 @@
+
 name: Crypto Scanner Bot
 
 on:
   schedule:
-    - cron: '0 * * * *' # يعمل تلقائياً كل ساعة
-  workflow_dispatch: # يتيح لك تشغيله يدوياً متى ما أردت من زر في قيت هاب
+    - cron: '*/10 * * * *' # يعمل تلقائياً كل 10 دقيقة
+  workflow_dispatch: # يتيح لك تشغيله يدوياً متى ما أردت
 
 jobs:
   run-bot:
