@@ -31,11 +31,7 @@ def calculate_rsi(series, period=14):
 def send_telegram_alert(message):
     if API_TOKEN and CHAT_ID:
         url = f"https://api.telegram.org/bot{API_TOKEN}/sendMessage"
-        payload = {
-            "chat_id": CHAT_ID,
-            "text": message,
-            "parse_mode": "Markdown"
-        }
+        payload = {"chat_id": CHAT_ID, "text": message, "parse_mode": "Markdown"}
         try:
             r = requests.post(url, json=payload, timeout=5)
             return r.status_code == 200
@@ -45,7 +41,7 @@ def send_telegram_alert(message):
 
 def main():
     current_time = datetime.now().strftime("%Y-%m-%d | %H:%M")
-    print(f"🚀 بدء فحص السوق لـ {len(TARGET_COINS)} عملة...")
+    print(f"🚀 بدء فحص المؤشرات المستقلة لـ {len(TARGET_COINS)} عملة...")
     
     alerts_sent = 0
     
@@ -61,7 +57,7 @@ def main():
                 close = df.iloc[:, 4]
                 volume = df.iloc[:, 5]
                 
-                # حساب المؤشرات الفنية
+                # حساب المؤشرات
                 ema20 = close.ewm(span=20).mean()
                 ema50 = close.ewm(span=50).mean()
                 rsi = calculate_rsi(close, 14)
@@ -82,38 +78,73 @@ def main():
                 current_vol = volume.iloc[-1]
                 chart = f"https://www.tradingview.com/chart/?symbol=BINANCE:{symbol}"
 
-                print(f"Flipping {symbol} -> Price: {cp}, RSI: {round(cur_rsi, 1)}")
-
-                # شروط استراتيجية الاتجاه والسيولة
-                is_active_volume = current_vol > avg_vol * 1.05
-                strat_long = (cp > cur_ema20) and (cur_ema20 > cur_ema50) and is_active_volume
-                strat_short = (cp < cur_ema20) and (cur_ema20 < cur_ema50) and is_active_volume
-                
-                if strat_long or strat_short:
-                    side = "LONG 🚀 (شراء)" if strat_long else "SHORT 📉 (بيع)"
-                    tp = cp * 1.025 if strat_long else cp * 0.975
-                    sl = cp * 0.985 if strat_long else cp * 1.015
-                    
-                    msg = (f"🔥 **فرصة تداول مرصودة**\n"
-                           f"━━━━━━━━━━━━━━\n"
+                # ----------------------------------------------------
+                # 1️⃣ مؤشر المتوسطات المتحركة (EMA) وحده
+                # ----------------------------------------------------
+                ema_long = (cp > cur_ema20) and (cur_ema20 > cur_ema50)
+                ema_short = (cp < cur_ema20) and (cur_ema20 < cur_ema50)
+                if ema_long or ema_short:
+                    side = "LONG 🚀 (شراء)" if ema_long else "SHORT 📉 (بيع)"
+                    msg = (f"📈 **تنبيه مؤشر (EMA)**\n"
                            f"🪙 العملة: #{symbol}\n"
                            f"⏱ الوقت: `{current_time}`\n"
-                           f"📊 الاتجاه: **{side}**\n\n"
-                           f"📥 سعر الدخول: `{cp}`\n"
-                           f"🎯 الهدف: `{round(tp, 4)}`\n"
-                           f"🛑 وقف الخسارة: `{round(sl, 4)}`\n\n"
-                           f"• مؤشر RSI: `{round(cur_rsi, 1)}`\n"
-                           f"━━━━━━━━━━━━━━\n"
-                           f"📈 [رابط الشارت المباشر]({chart})")
-                    
+                           f"📊 الإشارة: **{side}**\n"
+                           f"📥 السعر: `{cp}`\n"
+                           f"📈 [رابط الشارت]({chart})")
                     if send_telegram_alert(msg):
-                        print(f"✅ تم إرسال تنبيه ناجح للعملة: {symbol}")
                         alerts_sent += 1
+
+                # ----------------------------------------------------
+                # 2️⃣ مؤشر السيولة (Volume) وحده
+                # ----------------------------------------------------
+                is_high_volume = current_vol > avg_vol * 1.15
+                if is_high_volume:
+                    msg = (f"🌊 **تنبيه مؤشر السيولة (Volume)**\n"
+                           f"🪙 العملة: #{symbol}\n"
+                           f"⏱ الوقت: `{current_time}`\n"
+                           f"📊 الحالة: حجم تداول عالي يتجاوز المتوسط!\n"
+                           f"📥 السعر: `{cp}`\n"
+                           f"📈 [رابط الشارت]({chart})")
+                    if send_telegram_alert(msg):
+                        alerts_sent += 1
+
+                # ----------------------------------------------------
+                # 3️⃣ مؤشر القوة النسبية (RSI) وحده
+                # ----------------------------------------------------
+                rsi_oversold = cur_rsi < 30
+                rsi_overbought = cur_rsi > 70
+                if rsi_oversold or rsi_overbought:
+                    side = "LONG 🚀 (تشبع بيع - ارتداد)" if rsi_oversold else "SHORT 📉 (تشبع شراء)"
+                    msg = (f"⚡ **تنبيه مؤشر (RSI)**\n"
+                           f"🪙 العملة: #{symbol}\n"
+                           f"⏱ الوقت: `{current_time}`\n"
+                           f"📊 قيمة RSI: `{round(cur_rsi, 1)}`\n"
+                           f" الإشارة: **{side}**\n"
+                           f"📥 السعر: `{cp}`\n"
+                           f"📈 [رابط الشارت]({chart})")
+                    if send_telegram_alert(msg):
+                        alerts_sent += 1
+
+                # ----------------------------------------------------
+                # 4️⃣ مؤشر الماكد (MACD) وحده
+                # ----------------------------------------------------
+                macd_bullish = cur_macd > cur_signal and cur_macd < 0
+                macd_bearish = cur_macd < cur_signal and cur_macd > 0
+                if macd_bullish or macd_bearish:
+                    side = "LONG 🚀 (تقاطع إيجابي MACD)" if macd_bullish else "SHORT 📉 (تقاطع سلبي MACD)"
+                    msg = (f"🎯 **تنبيه مؤشر (MACD)**\n"
+                           f"🪙 العملة: #{symbol}\n"
+                           f"⏱ الوقت: `{current_time}`\n"
+                           f"📊 الإشارة: **{side}**\n"
+                           f"📥 السعر: `{cp}`\n"
+                           f"📈 [رابط الشارت]({chart})")
+                    if send_telegram_alert(msg):
+                        alerts_sent += 1
+
         except Exception as e:
-            print(f"خطأ في تحليل العملة {symbol}: {e}")
             continue
             
-    print(f"✨ اكتملت دورة الفحص. إجمالي التنبيهات المرسلة: {alerts_sent}")
+    print(f"✨ اكتمل فحص جميع المؤشرات. إجمالي التنبيهات: {alerts_sent}")
 
 if __name__ == "__main__":
     main()
