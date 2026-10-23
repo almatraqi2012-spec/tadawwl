@@ -85,12 +85,18 @@ def main():
                 ema_short = (cp < cur_ema20) and (cur_ema20 < cur_ema50)
                 if ema_long or ema_short:
                     side = "LONG 🚀 (شراء)" if ema_long else "SHORT 📉 (بيع)"
+                    tp = cp * 1.025 if ema_long else cp * 0.975
+                    sl = cp * 0.985 if ema_long else cp * 1.015
                     msg = (f"📈 **تنبيه مؤشر (EMA)**\n"
+                           f"━━━━━━━━━━━━━━\n"
                            f"🪙 العملة: #{symbol}\n"
                            f"⏱ الوقت: `{current_time}`\n"
-                           f"📊 الإشارة: **{side}**\n"
-                           f"📥 السعر: `{cp}`\n"
-                           f"📈 [رابط الشارت]({chart})")
+                           f"📊 الاتجاه: **{side}**\n\n"
+                           f"📥 سعر الدخول: `{cp}`\n"
+                           f"🎯 الهدف (TP): `{round(tp, 4)}`\n"
+                           f"🛑 وقف الخسارة (SL): `{round(sl, 4)}`\n"
+                           f"━━━━━━━━━━━━━━\n"
+                           f"📈 [رابط الشارت المباشر]({chart})")
                     if send_telegram_alert(msg):
                         alerts_sent += 1
 
@@ -99,12 +105,19 @@ def main():
                 # ----------------------------------------------------
                 is_high_volume = current_vol > avg_vol * 1.15
                 if is_high_volume:
+                    side = "LONG 🚀 (اندفاع سيولة صعودي)"
+                    tp = cp * 1.025
+                    sl = cp * 0.985
                     msg = (f"🌊 **تنبيه مؤشر السيولة (Volume)**\n"
+                           f"━━━━━━━━━━━━━━\n"
                            f"🪙 العملة: #{symbol}\n"
                            f"⏱ الوقت: `{current_time}`\n"
-                           f"📊 الحالة: حجم تداول عالي يتجاوز المتوسط!\n"
-                           f"📥 السعر: `{cp}`\n"
-                           f"📈 [رابط الشارت]({chart})")
+                           f"📊 الحالة: حجم تداول عالي يتجاوز المتوسط\n\n"
+                           f"📥 سعر الدخول: `{cp}`\n"
+                           f"🎯 الهدف (TP): `{round(tp, 4)}`\n"
+                           f"🛑 وقف الخسارة (SL): `{round(sl, 4)}`\n"
+                           f"━━━━━━━━━━━━━━\n"
+                           f"📈 [رابط الشارت المباشر]({chart})")
                     if send_telegram_alert(msg):
                         alerts_sent += 1
 
@@ -115,13 +128,18 @@ def main():
                 rsi_overbought = cur_rsi > 70
                 if rsi_oversold or rsi_overbought:
                     side = "LONG 🚀 (تشبع بيع - ارتداد)" if rsi_oversold else "SHORT 📉 (تشبع شراء)"
+                    tp = cp * 1.025 if rsi_oversold else cp * 0.975
+                    sl = cp * 0.985 if rsi_oversold else cp * 1.015
                     msg = (f"⚡ **تنبيه مؤشر (RSI)**\n"
+                           f"━━━━━━━━━━━━━━\n"
                            f"🪙 العملة: #{symbol}\n"
                            f"⏱ الوقت: `{current_time}`\n"
-                           f"📊 قيمة RSI: `{round(cur_rsi, 1)}`\n"
-                           f" الإشارة: **{side}**\n"
-                           f"📥 السعر: `{cp}`\n"
-                           f"📈 [رابط الشارت]({chart})")
+                           f"📊 قيمة RSI: `{round(cur_rsi, 1)}` | الإشارة: **{side}**\n\n"
+                           f"📥 سعر الدخول: `{cp}`\n"
+                           f"🎯 الهدف (TP): `{round(tp, 4)}`\n"
+                           f"🛑 وقف الخسارة (SL): `{round(sl, 4)}`\n"
+                           f"━━━━━━━━━━━━━━\n"
+                           f"📈 [رابط الشارت المباشر]({chart})")
                     if send_telegram_alert(msg):
                         alerts_sent += 1
 
@@ -132,12 +150,18 @@ def main():
                 macd_bearish = cur_macd < cur_signal and cur_macd > 0
                 if macd_bullish or macd_bearish:
                     side = "LONG 🚀 (تقاطع إيجابي MACD)" if macd_bullish else "SHORT 📉 (تقاطع سلبي MACD)"
+                    tp = cp * 1.025 if macd_bullish else cp * 0.975
+                    sl = cp * 0.985 if macd_bullish else cp * 1.015
                     msg = (f"🎯 **تنبيه مؤشر (MACD)**\n"
+                           f"━━━━━━━━━━━━━━\n"
                            f"🪙 العملة: #{symbol}\n"
                            f"⏱ الوقت: `{current_time}`\n"
-                           f"📊 الإشارة: **{side}**\n"
-                           f"📥 السعر: `{cp}`\n"
-                           f"📈 [رابط الشارت]({chart})")
+                           f"📊 الإشارة: **{side}**\n\n"
+                           f"📥 سعر الدخول: `{cp}`\n"
+                           f"🎯 الهدف (TP): `{round(tp, 4)}`\n"
+                           f"🛑 وقف الخسارة (SL): `{round(sl, 4)}`\n"
+                           f"━━━━━━━━━━━━━━\n"
+                           f"📈 [رابط الشارت المباشر]({chart})")
                     if send_telegram_alert(msg):
                         alerts_sent += 1
 
