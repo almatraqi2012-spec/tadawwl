@@ -40,9 +40,10 @@ def send_telegram_alert(message):
             "parse_mode": "Markdown"
         }
         try:
-            requests.post(url, json=payload, timeout=5)
-        except:
-            pass
+            r = requests.post(url, json=payload, timeout=5)
+            print(f"Telegram API Response: {r.status_code} - {r.text}") # لتري سبب الإرسال في السجلات
+        except Exception as e:
+            print(f"Telegram Error: {e}")
 
 def main():
     current_time = datetime.now().strftime("%Y-%m-%d | %H:%M")
