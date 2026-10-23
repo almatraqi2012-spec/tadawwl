@@ -22,7 +22,6 @@ TARGET_COINS = [
 TARGET_COINS = list(set(TARGET_COINS))
 
 def format_price(price):
-    """تنسيق دقيق وحقيقي للأعراب والعملات بمختلف أحجامها"""
     if price < 0.0001:
         return f"{price:.8f}"
     elif price < 1:
@@ -38,7 +37,6 @@ def calculate_rsi(series, period=14):
     return 100 - (100 / (1 + rs))
 
 def calculate_atr(df, period=14):
-    """حساب مؤشر التذبذب الحقيقي (ATR) لحماية الصفقة وتحديد أهداف واقعية"""
     high = df.iloc[:, 2]
     low = df.iloc[:, 3]
     close = df.iloc[:, 4]
@@ -61,7 +59,10 @@ def send_telegram_alert(message):
 
 def main():
     current_time = datetime.now().strftime("%Y-%m-%d | %H:%M")
-    print(f"💼 بدء التحليل الاحترافي الحقيقي (Confluence + ATR) لـ {len(TARGET_COINS)} عملة...")
+    print(f"💼 بدء الفحص الاحترافي (Confluence + ATR) لـ {len(TARGET_COINS)} عملة...")
+    
+    # إرسال رسالة بداية الدورة لتطمئن أن البوت متصل وشغال
+    send_telegram_alert(f"🔄 **بدأت دورة فحص السوق الآن**\n⏱ الوقت: `{current_time}`\n📊 جاري فحص وتحليل {len(TARGET_COINS)} عملة...")
     
     alerts_sent = 0
     
@@ -77,7 +78,6 @@ def main():
                 close = df.iloc[:, 4]
                 volume = df.iloc[:, 5]
                 
-                # حساب المؤشرات الاحترافية
                 ema20 = close.ewm(span=20).mean()
                 ema50 = close.ewm(span=50).mean()
                 rsi = calculate_rsi(close, 14)
@@ -93,25 +93,17 @@ def main():
                 current_vol = volume.iloc[-1]
                 chart = f"https://www.tradingview.com/chart/?symbol=BINANCE:{symbol}"
 
-                # التحقق من صحة بيانات ATR لتجنب أي أخطاء
                 if np.isnan(cur_atr) or cur_atr <= 0:
                     continue
 
-                # ----------------------------------------------------
-                # إستراتيجية التقاء المؤشرات الحقيقية (Confluence Strategy)
-                # ----------------------------------------------------
-                
-                # شرط الشراء (LONG الاحترافي): الاتجاه صاعد + سيولة مرتفعة + RSI غير مشبع شراء
                 is_trend_up = (cp > cur_ema20) and (cur_ema20 > cur_ema50)
-                is_volume_high = current_vol > (avg_vol * 1.2) # سيولة أعلى بـ 20% من المتوسط
+                is_volume_high = current_vol > (avg_vol * 1.2)
                 is_rsi_safe_long = (cur_rsi > 45) and (cur_rsi < 68)
 
-                # شرط البيع (SHORT الاحترافي): الاتجاه هابط + سيولة مرتفعة + RSI غير مشبع بيع
                 is_trend_down = (cp < cur_ema20) and (cur_ema20 < cur_ema50)
                 is_rsi_safe_short = (cur_rsi > 32) and (cur_rsi < 55)
 
                 if is_trend_up and is_volume_high and is_rsi_safe_long:
-                    # حساب الهدف ووقف الخسارة بناءً على تذبذب العملة (ATR) بنسبة مخاطر العائد 1:2
                     tp = cp + (cur_atr * 2.5)
                     sl = cp - (cur_atr * 1.25)
                     
@@ -151,6 +143,9 @@ def main():
             continue
             
     print(f"✨ اكتمل الفحص الاحترافي. الصفقات المؤكدة المكتشفة: {alerts_sent}")
+    
+    # إرسال رسالة عند انتهاء الدورة توضح هل تم العثور على صفقات أم لا
+    send_telegram_alert(f"✅ **انتهت دورة الفحص**\n⏱ الوقت: `{current_time}`\n📊 الصفقات المؤكدة المكتشفة: `{alerts_sent}`")
 
 if __name__ == "__main__":
     main()
