@@ -1,151 +1,97 @@
-import os
-from datetime import datetime
 import requests
 import pandas as pd
 import numpy as np
+import os
 
-API_TOKEN = os.getenv("BOT_TOKEN")
+# === [ إعدادات VIP - شركة سهم القابضة ] ===
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
+MIN_VOLUME = 50000000  # سيولة قوية لضمان الحيتان
+# ========================================
 
-TARGET_COINS = [
-    "BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "ADAUSDT", 
-    "DOGEUSDT", "AVAXUSDT", "LINKUSDT", "NEARUSDT", "SUIUSDT",
-    "PEPEUSDT", "SHIBUSDT", "RENDERUSDT", "FETUSDT", "INJUSDT",
-    "MATICUSDT", "UNIUSDT", "ATOMUSDT", "APTUSDT", "ARBUSDT",
-    "OPUSDT", "LTCUSDT", "BCHUSDT", "ICPUSDT", "FILUSDT",
-    "TONUSDT", "TIAUSDT", "SEIUSDT", "SAGAUSDT", "STRKUSDT",
-    "MANTAUSDT", "PENDLEUSDT", "RUNEUSDT", "GRTUSDT", "AAVEUSDT",
-    "MKRUSDT", "SNXUSDT", "CRVUSDT", "COMPUSDT", "JUPUSDT",
-    "WIFUSDT", "BONKUSDT", "FLOKIUSDT", "BOMEUSDT", "NOTUSDT", "DOGSUSDT"
-]
+def send_confirmed_signal(symbol, price, model_type, tp1, tp2, sl):
+    clean_sym = symbol.replace("USDT", "")
+    emoji = "🚀" if "صاعد" in model_type else "📉"
+    tv_link = f"https://www.tradingview.com/chart/?symbol=BINANCE:{clean_sym}USDT"
 
-TARGET_COINS = list(set(TARGET_COINS))
+    msg = (
+        f"🏛 *شركة سهم القابضة للاستثمار*\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"{emoji} *توصية هندسية مؤكدة (نماذج حقيقية)*\n\n"
+        f"💰 *العملة:* #{clean_sym}\n"
+        f"📐 *الحالة:* {model_type}\n\n"
+        f"📥 *سعر الدخول:* `{price}`\n\n"
+        f"🎯 *الأهداف (VIP):*\n"
+        f"1️⃣ *هدف أول:* `{tp1}`\n"
+        f"2️⃣ *هدف ثاني:* `{tp2}`\n\n"
+        f"🛡️ *وقف الخسارة:* `{sl}`\n\n"
+        f"🔗 *[فحص الشارت عبر TradingView]({tv_link})*\n"
+        f"━━━━━━━━━━━━━━━━━━"
+    )
 
-def format_price(price):
-    if price < 0.0001:
-        return f"{price:.8f}"
-    elif price < 1:
-        return f"{price:.4f}"
-    else:
-        return f"{price:.2f}"
-
-def calculate_rsi(series, period=14):
-    delta = series.diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
-    rs = gain / loss
-    return 100 - (100 / (1 + rs))
-
-def calculate_atr(df, period=14):
-    high = df.iloc[:, 2]
-    low = df.iloc[:, 3]
-    close = df.iloc[:, 4]
-    tr1 = high - low
-    tr2 = (high - close.shift()).abs()
-    tr3 = (low - close.shift()).abs()
-    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-    return tr.rolling(window=period).mean()
-
-def send_telegram_alert(message):
-    if API_TOKEN and CHAT_ID:
-        url = f"https://api.telegram.org/bot{API_TOKEN}/sendMessage"
-        payload = {"chat_id": CHAT_ID, "text": message, "parse_mode": "Markdown"}
+    if BOT_TOKEN and CHAT_ID:
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
         try:
-            r = requests.post(url, json=payload, timeout=5)
-            return r.status_code == 200
-        except:
-            return False
-    return False
+            requests.post(url, json={"chat_id": CHAT_ID, "text": msg, "parse_mode": "Markdown"}, timeout=5)
+            print(f"✅ تم إرسال توصية نموذج حقيقي لـ {symbol}")
+        except Exception as e:
+            print(f"❌ خطأ في إرسال التليجرام: {e}")
+
+def analyze_triangle_patterns(symbol):
+    url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval=1h&limit=40"
+    try:
+        r = requests.get(url, timeout=5)
+        if r.status_code == 200:
+            data = r.json()
+            if len(data) < 35:
+                return None
+            
+            df = pd.DataFrame(data).astype(float)
+            highs = df.iloc[:, 2].tail(30)
+            lows = df.iloc[:, 3].tail(30)
+            close = df.iloc[:, 4].tail(30)
+            
+            cp = close.iloc[-1]
+            
+            low_slope = np.polyfit(np.arange(30), lows.values, 1)[0]
+            high_std = highs.std()
+            is_ascending_triangle = (low_slope > 0) and (high_std / cp < 0.015) and (cp >= highs.max() * 0.99)
+            
+            high_slope = np.polyfit(np.arange(30), highs.values, 1)[0]
+            low_std = lows.std()
+            is_descending_triangle = (high_slope < 0) and (low_std / cp < 0.015) and (cp <= lows.min() * 1.01)
+            
+            if is_ascending_triangle:
+                tp1 = round(cp * 1.025, 4 if cp < 1 else 2)
+                tp2 = round(cp * 1.05, 4 if cp < 1 else 2)
+                sl = round(cp * 0.985, 4 if cp < 1 else 2)
+                return "اختراق مثلث صاعد حقيقي ✅", tp1, tp2, sl, "LONG"
+                
+            elif is_descending_triangle:
+                tp1 = round(cp * 0.975, 4 if cp < 1 else 2)
+                tp2 = round(cp * 0.95, 4 if cp < 1 else 2)
+                sl = round(cp * 1.015, 4 if cp < 1 else 2)
+                return "كسر مثلث نازل حقيقي 📉", tp1, tp2, sl, "SHORT"
+                
+    except:
+        pass
+    return None
 
 def main():
-    current_time = datetime.now().strftime("%Y-%m-%d | %H:%M")
-    print(f"💼 بدء الفحص الاحترافي (Confluence + ATR) لـ {len(TARGET_COINS)} عملة...")
-    
-    # إرسال رسالة بداية الدورة لتطمئن أن البوت متصل وشغال
-    send_telegram_alert(f"🔄 **بدأت دورة فحص السوق الآن**\n⏱ الوقت: `{current_time}`\n📊 جاري فحص وتحليل {len(TARGET_COINS)} عملة...")
-    
-    alerts_sent = 0
-    
-    for symbol in TARGET_COINS:
-        url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval=1h&limit=60"
-        try:
-            r = requests.get(url, timeout=5)
-            if r.status_code == 200:
-                data = r.json()
-                if len(data) < 40:
-                    continue
-                df = pd.DataFrame(data).astype(float)
-                close = df.iloc[:, 4]
-                volume = df.iloc[:, 5]
-                
-                ema20 = close.ewm(span=20).mean()
-                ema50 = close.ewm(span=50).mean()
-                rsi = calculate_rsi(close, 14)
-                atr = calculate_atr(df, 14)
-                
-                cp = close.iloc[-1]
-                cur_ema20 = ema20.iloc[-1]
-                cur_ema50 = ema50.iloc[-1]
-                cur_rsi = rsi.iloc[-1]
-                cur_atr = atr.iloc[-1]
-                
-                avg_vol = volume.rolling(20).mean().iloc[-1]
-                current_vol = volume.iloc[-1]
-                chart = f"https://www.tradingview.com/chart/?symbol=BINANCE:{symbol}"
-
-                if np.isnan(cur_atr) or cur_atr <= 0:
-                    continue
-
-                is_trend_up = (cp > cur_ema20) and (cur_ema20 > cur_ema50)
-                is_volume_high = current_vol > (avg_vol * 1.2)
-                is_rsi_safe_long = (cur_rsi > 45) and (cur_rsi < 68)
-
-                is_trend_down = (cp < cur_ema20) and (cur_ema20 < cur_ema50)
-                is_rsi_safe_short = (cur_rsi > 32) and (cur_rsi < 55)
-
-                if is_trend_up and is_volume_high and is_rsi_safe_long:
-                    tp = cp + (cur_atr * 2.5)
-                    sl = cp - (cur_atr * 1.25)
-                    
-                    msg = (f"💎 **إستراتيجية احترافية مؤكدة (LONG)**\n"
-                           f"━━━━━━━━━━━━━━\n"
-                           f"🪙 العملة: #{symbol}\n"
-                           f"⏱ الوقت: `{current_time}`\n"
-                           f"📊 الحالة: توافق الاتجاه + سيولة قوية + RSI ({round(cur_rsi, 1)})\n\n"
-                           f"📥 سعر الدخول: `{format_price(cp)}`\n"
-                           f"🎯 الهدف المقترح (TP): `{format_price(tp)}`\n"
-                           f"🛑 وقف الخسارة (SL): `{format_price(sl)}`\n"
-                           f"━━━━━━━━━━━━━━\n"
-                           f"📈 [رابط الشارت المباشر]({chart})")
-                    
-                    if send_telegram_alert(msg):
-                        alerts_sent += 1
-
-                elif is_trend_down and is_volume_high and is_rsi_safe_short:
-                    tp = cp - (cur_atr * 2.5)
-                    sl = cp + (cur_atr * 1.25)
-                    
-                    msg = (f"💎 **إستراتيجية احترافية مؤكدة (SHORT)**\n"
-                           f"━━━━━━━━━━━━━━\n"
-                           f"🪙 العملة: #{symbol}\n"
-                           f"⏱ الوقت: `{current_time}`\n"
-                           f"📊 الحالة: هبوط متوافق مع السيولة + RSI ({round(cur_rsi, 1)})\n\n"
-                           f"📥 سعر الدخول: `{format_price(cp)}`\n"
-                           f"🎯 الهدف المقترح (TP): `{format_price(tp)}`\n"
-                           f"🛑 وقف الخسارة (SL): `{format_price(sl)}`\n"
-                           f"━━━━━━━━━━━━━━\n"
-                           f"📈 [رابط الشارت المباشر]({chart})")
-                    
-                    if send_telegram_alert(msg):
-                        alerts_sent += 1
-
-        except Exception as e:
-            continue
-            
-    print(f"✨ اكتمل الفحص الاحترافي. الصفقات المؤكدة المكتشفة: {alerts_sent}")
-    
-    # إرسال رسالة عند انتهاء الدورة توضح هل تم العثور على صفقات أم لا
-    send_telegram_alert(f"✅ **انتهت دورة الفحص**\n⏱ الوقت: `{current_time}`\n📊 الصفقات المؤكدة المكتشفة: `{alerts_sent}`")
+    print("📡 رادار شركة سهم القابضة يبدأ الفحص الد دوري...")
+    try:
+        res = requests.get("https://api.binance.com/api/v3/ticker/24hr", timeout=10).json()
+        for coin in res:
+            symbol = coin['symbol']
+            if symbol.endswith("USDT") and float(coin['quoteVolume']) > MIN_VOLUME:
+                result = analyze_triangle_patterns(symbol)
+                if result:
+                    model_type, tp1, tp2, sl, side = result
+                    price = float(coin['lastPrice'])
+                    send_confirmed_signal(symbol, price, model_type, tp1, tp2, sl)
+        print("✨ انتهت دورة الفحص بنجاح.")
+    except Exception as e:
+        print(f"❌ خطأ في الدورة: {e}")
 
 if __name__ == "__main__":
     main()
