@@ -6,13 +6,20 @@ import os
 # === [ إعدادات VIP - شركة سهم القابضة ] ===
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
-MIN_VOLUME = 50000000  # سيولة قوية لضمان الحيتان
 # ========================================
 
-# إعداد رؤوس تصفح وهمية لتجاوز حماية بينانس
+# قائمة العملات القوية الكبرى التي يتداول عليها الحيتان مباشرة لتجنب حظر الـ API العام
+TARGET_COINS = [
+    "BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "ADAUSDT", 
+    "DOGEUSDT", "AVAXUSDT", "LINKUSDT", "NEARUSDT", "SUIUSDT",
+    "PEPEUSDT", "SHIBUSDT", "RENDERUSDT", "FETUSDT", "INJUSDT",
+    "UNIUSDT", "ATOMUSDT", "APTUSDT", "ARBUSDT", "OPUSDT", 
+    "LTCUSDT", "BCHUSDT", "ICPUSDT", "FILUSDT", "TONUSDT", 
+    "TIAUSDT", "SEIUSDT", "AAVEUSDT", "JUPUSDT", "WIFUSDT"
+]
+
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Accept": "application/json"
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 }
 
 def send_confirmed_signal(symbol, price, model_type, tp1, tp2, sl):
@@ -71,40 +78,30 @@ def analyze_triangle_patterns(symbol):
                 tp1 = round(cp * 1.025, 4 if cp < 1 else 2)
                 tp2 = round(cp * 1.05, 4 if cp < 1 else 2)
                 sl = round(cp * 0.985, 4 if cp < 1 else 2)
-                return "اختراق مثلث صاعد حقيقي ✅", tp1, tp2, sl, "LONG"
+                return "اختراق مثلث صاعد حقيقي ✅", tp1, tp2, sl, cp
                 
             elif is_descending_triangle:
                 tp1 = round(cp * 0.975, 4 if cp < 1 else 2)
                 tp2 = round(cp * 0.95, 4 if cp < 1 else 2)
                 sl = round(cp * 1.015, 4 if cp < 1 else 2)
-                return "كسر مثلث نازل حقيقي 📉", tp1, tp2, sl, "SHORT"
+                return "كسر مثلث نازل حقيقي 📉", tp1, tp2, sl, cp
                 
     except Exception as e:
         pass
     return None
 
 def main():
-    print("📡 رادار شركة سهم القابضة يبدأ الفحص الد دوري...")
-    try:
-        res = requests.get("https://api.binance.com/api/v3/ticker/24hr", headers=HEADERS, timeout=10).json()
-        
-        if not isinstance(res, list):
-            print("❌ استجابة غير صالحة من بينانس (تم حظر الطلب مؤقتاً)")
-            return
-
-        for coin in res:
-            if isinstance(coin, dict) and 'symbol' in coin:
-                symbol = coin['symbol']
-                if symbol.endswith("USDT") and float(coin.get('quoteVolume', 0)) > MIN_VOLUME:
-                    result = analyze_triangle_patterns(symbol)
-                    if result:
-                        model_type, tp1, tp2, sl, side = result
-                        price = float(coin['lastPrice'])
-                        send_confirmed_signal(symbol, price, model_type, tp1, tp2, sl)
-                        
-        print("✨ انتهت دورة الفحص بنجاح.")
-    except Exception as e:
-        print(f"❌ خطأ في الدورة: {e}")
+    print(f"📡 رادار شركة سهم القابضة يبدأ فحص {len(TARGET_COINS)} عملة رئيسية...")
+    
+    signals_found = 0
+    for symbol in TARGET_COINS:
+        result = analyze_triangle_patterns(symbol)
+        if result:
+            model_type, tp1, tp2, sl, price = result
+            send_confirmed_signal(symbol, price, model_type, tp1, tp2, sl)
+            signals_found += 1
+            
+    print(f"✨ انتهت دورة الفحص بنجاح. الصفقات المكتشفة: {signals_found}")
 
 if __name__ == "__main__":
     main()
