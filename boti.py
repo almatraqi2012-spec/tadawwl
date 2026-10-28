@@ -43,7 +43,7 @@ def analyze_triangle_patterns(symbol):
         r = requests.get(url, timeout=5)
         if r.status_code == 200:
             data = r.json()
-            if len(data) < 35:
+            if not isinstance(data, list) or len(data) < 35:
                 return None
             
             df = pd.DataFrame(data).astype(float)
@@ -73,7 +73,7 @@ def analyze_triangle_patterns(symbol):
                 sl = round(cp * 1.015, 4 if cp < 1 else 2)
                 return "كسر مثلث نازل حقيقي 📉", tp1, tp2, sl, "SHORT"
                 
-    except:
+    except Exception as e:
         pass
     return None
 
@@ -81,14 +81,22 @@ def main():
     print("📡 رادار شركة سهم القابضة يبدأ الفحص الد دوري...")
     try:
         res = requests.get("https://api.binance.com/api/v3/ticker/24hr", timeout=10).json()
+        
+        # التأكد من أن الرد عبارة عن قائمة بيانات صحيحة وليست رسالة خطأ
+        if not isinstance(res, list):
+            print("❌ استجابة غير صالحة من بينانس")
+            return
+
         for coin in res:
-            symbol = coin['symbol']
-            if symbol.endswith("USDT") and float(coin['quoteVolume']) > MIN_VOLUME:
-                result = analyze_triangle_patterns(symbol)
-                if result:
-                    model_type, tp1, tp2, sl, side = result
-                    price = float(coin['lastPrice'])
-                    send_confirmed_signal(symbol, price, model_type, tp1, tp2, sl)
+            if isinstance(coin, dict) and 'symbol' in coin:
+                symbol = coin['symbol']
+                if symbol.endswith("USDT") and float(coin.get('quoteVolume', 0)) > MIN_VOLUME:
+                    result = analyze_triangle_patterns(symbol)
+                    if result:
+                        model_type, tp1, tp2, sl, side = result
+                        price = float(coin['lastPrice'])
+                        send_confirmed_signal(symbol, price, model_type, tp1, tp2, sl)
+                        
         print("✨ انتهت دورة الفحص بنجاح.")
     except Exception as e:
         print(f"❌ خطأ في الدورة: {e}")
