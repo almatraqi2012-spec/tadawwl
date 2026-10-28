@@ -9,6 +9,12 @@ CHAT_ID = os.getenv("CHAT_ID")
 MIN_VOLUME = 50000000  # سيولة قوية لضمان الحيتان
 # ========================================
 
+# إعداد رؤوس تصفح وهمية لتجاوز حماية بينانس
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "application/json"
+}
+
 def send_confirmed_signal(symbol, price, model_type, tp1, tp2, sl):
     clean_sym = symbol.replace("USDT", "")
     emoji = "🚀" if "صاعد" in model_type else "📉"
@@ -40,7 +46,7 @@ def send_confirmed_signal(symbol, price, model_type, tp1, tp2, sl):
 def analyze_triangle_patterns(symbol):
     url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval=1h&limit=40"
     try:
-        r = requests.get(url, timeout=5)
+        r = requests.get(url, headers=HEADERS, timeout=5)
         if r.status_code == 200:
             data = r.json()
             if not isinstance(data, list) or len(data) < 35:
@@ -80,11 +86,10 @@ def analyze_triangle_patterns(symbol):
 def main():
     print("📡 رادار شركة سهم القابضة يبدأ الفحص الد دوري...")
     try:
-        res = requests.get("https://api.binance.com/api/v3/ticker/24hr", timeout=10).json()
+        res = requests.get("https://api.binance.com/api/v3/ticker/24hr", headers=HEADERS, timeout=10).json()
         
-        # التأكد من أن الرد عبارة عن قائمة بيانات صحيحة وليست رسالة خطأ
         if not isinstance(res, list):
-            print("❌ استجابة غير صالحة من بينانس")
+            print("❌ استجابة غير صالحة من بينانس (تم حظر الطلب مؤقتاً)")
             return
 
         for coin in res:
